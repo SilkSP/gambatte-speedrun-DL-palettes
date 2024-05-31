@@ -361,6 +361,8 @@ GambatteMenuHandler::GambatteMenuHandler(MainWindow &mw,
 , recentFileActs_()
 , pauseAction_()
 , syncFrameRateAction_()
+, gbaCgbAction_()
+, forceDmgAction_()
 , fsAct_()
 , recentMenu_()
 , globalPaletteDialog_()
@@ -472,8 +474,9 @@ GambatteMenuHandler::GambatteMenuHandler(MainWindow &mw,
 
 		cmdactions += playm->actions();
 	}
-
-	QMenu *const settingsm = mw.menuBar()->addMenu(tr("&Settings"));
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//Speedrun
+	QMenu* const settingsm = mw.menuBar()->addMenu(tr("&Settings"));
 	settingsm->addAction(tr("&Input..."), this, SLOT(execInputDialog()));
 	settingsm->addAction(tr("&Miscellaneous..."), this, SLOT(execMiscDialog()));
 	settingsm->addAction(tr("&Sound..."), this, SLOT(execSoundDialog()));
@@ -482,11 +485,26 @@ GambatteMenuHandler::GambatteMenuHandler(MainWindow &mw,
 	settingsm->addMenu(windowSizeMenu_.menu());
 	settingsm->addSeparator();
 
-	settingsm->addMenu(gambattePlatformMenu_.menu());
+
+	gbaCgbAction_ = settingsm->addAction(tr("GB&A CGB Mode"));
+	gbaCgbAction_->setCheckable(true);
+	gbaCgbAction_->setChecked(QSettings().value("gbacgb", false).toBool());
+	forceDmgAction_ = settingsm->addAction(tr("Force &DMG Mode"));
+	forceDmgAction_->setCheckable(true);
 
 	{
-		QMenu *const rtcModeMenu = settingsm->addMenu(tr("Real &Time Clock"));
-		QActionGroup *const rtcModeActions = new QActionGroup(rtcModeMenu);
+		QMenu* const palm = settingsm->addMenu(tr("DMG &Palette"));
+		palm->addAction(tr("&Global..."), this, SLOT(execGlobalPaletteDialog()));
+
+		QAction* romPaletteAct = palm->addAction(tr("Current &ROM..."), this, SLOT(execRomPaletteDialog()));
+		romPaletteAct->setEnabled(false);
+		connect(this, SIGNAL(dmgRomLoaded(bool)), romPaletteAct, SLOT(setEnabled(bool)));
+	}
+
+	settingsm->addMenu(gambattePlatformMenu_.menu());
+	{
+		QMenu* const rtcModeMenu = settingsm->addMenu(tr("Real &Time Clock"));
+		QActionGroup* const rtcModeActions = new QActionGroup(rtcModeMenu);
 		cycleBasedAction_ = rtcModeMenu->addAction(tr("&Cycle-based"));
 		cycleBasedAction_->setCheckable(true);
 		cycleBasedAction_->setChecked(QSettings().value("rtc-mode", true).toBool());
@@ -495,7 +513,7 @@ GambatteMenuHandler::GambatteMenuHandler(MainWindow &mw,
 		realTimeAction_->setCheckable(true);
 		realTimeAction_->setChecked(!cycleBasedAction_->isChecked());
 		rtcModeActions->addAction(realTimeAction_);
-		connect(rtcModeActions, SIGNAL(triggered(QAction *)), this, SLOT(setRtcMode()));
+		connect(rtcModeActions, SIGNAL(triggered(QAction*)), this, SLOT(setRtcMode()));
 	}
 
 	trueColorsAction_ = settingsm->addAction(tr("True &Colors"));
@@ -512,6 +530,62 @@ GambatteMenuHandler::GambatteMenuHandler(MainWindow &mw,
 	//                            cheatDialog_, SLOT(exec())));
 	romLoadedActions->setEnabled(false);
 	mw.menuBar()->addSeparator();
+
+
+
+	settingsm->addSeparator();
+	fsAct_ = settingsm->addAction(tr("&Full Screen"), this, SLOT(toggleFullScreen()), tr("Ctrl+F"));
+	fsAct_->setCheckable(true);
+	cmdactions += settingsm->actions();
+
+	romLoadedActions->addAction(mw.menuBar()->addMenu(tr("&Tools"))->addAction(tr("&Cheats..."),
+		cheatDialog_, SLOT(exec())));
+	romLoadedActions->setEnabled(false);
+	mw.menuBar()->addSeparator();
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//Original
+	/*
+	QMenu* const settingsm = mw.menuBar()->addMenu(tr("&Settings"));
+	settingsm->addAction(tr("&Input..."), this, SLOT(execInputDialog()));
+	settingsm->addAction(tr("&Miscellaneous..."), this, SLOT(execMiscDialog()));
+	settingsm->addAction(tr("&Sound..."), this, SLOT(execSoundDialog()));
+	settingsm->addAction(tr("&Video..."), this, SLOT(execVideoDialog()));
+	settingsm->addSeparator();
+	settingsm->addMenu(windowSizeMenu_.menu());
+	settingsm->addSeparator();
+	//
+
+
+	gbaCgbAction_ = settingsm->addAction(tr("GB&A CGB Mode"));
+	gbaCgbAction_->setCheckable(true);
+	gbaCgbAction_->setChecked(QSettings().value("gbacgb", false).toBool());
+	forceDmgAction_ = settingsm->addAction(tr("Force &DMG Mode"));
+	forceDmgAction_->setCheckable(true);
+
+	{
+		QMenu* const palm = settingsm->addMenu(tr("DMG &Palette"));
+		palm->addAction(tr("&Global..."), this, SLOT(execGlobalPaletteDialog()));
+
+		QAction* romPaletteAct = palm->addAction(tr("Current &ROM..."), this, SLOT(execRomPaletteDialog()));
+		romPaletteAct->setEnabled(false);
+		connect(this, SIGNAL(dmgRomLoaded(bool)), romPaletteAct, SLOT(setEnabled(bool)));
+	}
+
+	settingsm->addSeparator();
+	fsAct_ = settingsm->addAction(tr("&Full Screen"), this, SLOT(toggleFullScreen()), tr("Ctrl+F"));
+	fsAct_->setCheckable(true);
+	cmdactions += settingsm->actions();
+
+	romLoadedActions->addAction(mw.menuBar()->addMenu(tr("&Tools"))->addAction(tr("&Cheats..."),
+		cheatDialog_, SLOT(exec())));
+	romLoadedActions->setEnabled(false);
+	mw.menuBar()->addSeparator();
+	*/
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 	QMenu *const helpMenu = mw.menuBar()->addMenu(tr("&Help"));
 	helpMenu->addAction(tr("&About"), this, SLOT(about()));
@@ -588,6 +662,7 @@ GambatteMenuHandler::GambatteMenuHandler(MainWindow &mw,
 
 GambatteMenuHandler::~GambatteMenuHandler() {
 	QSettings settings;
+	settings.setValue("gbacgb", gbaCgbAction_->isChecked());
 	settings.setValue("rtc-mode", cycleBasedAction_->isChecked());
 	settings.setValue("true-colors", trueColorsAction_->isChecked());
 }
@@ -673,7 +748,11 @@ void GambatteMenuHandler::loadFile(QString const &fileName) {
 	
 	std::cout << "Loading rom..." << std::endl;
 
-	if (gambatte::LoadRes const error = source_.load(fileName.toLocal8Bit().constData(), flags)) {
+	if (gambatte::LoadRes const error =
+		source_.load(fileName.toLocal8Bit().constData(),
+			gbaCgbAction_->isChecked() * gambatte::GB::GBA_CGB
+			+ forceDmgAction_->isChecked() * gambatte::GB::FORCE_DMG
+			+ miscDialog_->multicartCompat() * gambatte::GB::MULTICART_COMPAT)) {
 		mw_.stop();
 		emit dmgRomLoaded(false);
 		emit romLoaded(false);
@@ -694,7 +773,7 @@ void GambatteMenuHandler::loadFile(QString const &fileName) {
 		romPaletteDialog_->setSettingsFile(
 				QFileInfo(fileName).completeBaseName() + ".pal",
 				romTitle);
-		//setDmgPaletteColors();
+		setDmgPaletteColors();
 	}
 
 	source_.setTrueColors(trueColorsAction_->isChecked());

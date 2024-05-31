@@ -165,6 +165,8 @@ private:
 	QAction *recentFileActs_[max_recent_files];
 	QAction *pauseAction_;
 	QAction *syncFrameRateAction_;
+	QAction* gbaCgbAction_;
+	QAction* forceDmgAction_;
 	QAction *cycleBasedAction_;
 	QAction *realTimeAction_;
 	QAction *trueColorsAction_;
